@@ -1,14 +1,39 @@
+import { prisma } from '@/lib/prisma'
+import { execSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { Environment } from 'vitest'
+// postgresql://docker:docker@localhost:5432/apisolid?schema=public
 
+function genereteDatabaseURL(schema: string) {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('Please provide a DATABASE_URL env variable.')
+  }
+
+  const url = new URL(process.env.DATABASE_URL)
+
+  url.searchParams.set('schema', schema)
+
+  return url.toString()
+}
 export default <Environment>{
   transformMode: 'ssr',
   name: 'prisma',
   async setup() {
-    console.log('Setup')
+    const schema = randomUUID()
+
+    const databaseURL = genereteDatabaseURL(schema)
+
+    process.env.DATABASE_URL = databaseURL
+
+    execSync('npx prisma migrate deploy')
 
     return {
       async teardown() {
-        console.log('Teardown')
+        await prisma.$executeRawUnsafe(
+          `DROP SCHEMA IF EXISTS "${schema}" CASCADE;`,
+        )
+
+        await prisma.$disconnect()
       },
     }
   },
